@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1e293b">
+  <meta name="mobile-web-app-capable" content="yes">
+  
+  <title>Mercado Manu Pro v114</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: light !important; }
+    
+    html, body {
+      margin: 0; padding: 0;
+      height: 100%; width: 100%;
+      overscroll-behavior-y: none !important; 
+      overflow: hidden;
+      background-color: #f1f5f9;
+      position: fixed;
+    }
+
+    #appWrapper { 
+      height: 100%; width: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-item { background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-left: 4px solid transparent; }
+    .comprado { opacity: 0.5; background: #e2e8f0 !important; text-decoration: line-through; border-left-color: #94a3b8 !important; }
+    
+    #customConfirm {
+      display: none;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(4px);
+      z-index: 9999; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .modal-content {
+      background: white; width: 100%; max-width: 320px;
+      padding: 25px; border-radius: 24px;
+      text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    }
+    #customConfirm.show { display: flex; }
+
+    .footer-sticky { position: fixed; bottom: 70px; left: 0; right: 0; background: #1e293b; padding: 15px 20px; color: white; border-top: 2px solid #4f46e5; z-index: 150; }
+    .nav-fixed { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; background: white; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-around; align-items: center; z-index: 200; }
+    
+    .content-section { display: none; padding-bottom: 250px; }
+    .active-section { display: block; }
+    .spinning { animation: spin 1s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+
+    input, select { user-select: text !important; -webkit-user-select: text !important; outline: none; }
+    .sugerencia-link { padding: 15px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 10px; font-weight: 900; text-transform: uppercase; font-size: 14px; color: #1e293b; }
+    
+    .historial-card { border-left: 6px solid #4f46e5 !important; background: #ffffff; }
+    .detalles-historial { display: none; margin-top: 10px; padding-top: 10px; border-top: 2px solid #f1f5f9; }
+    .detalles-historial.open { display: block; }
+  </style>
+</head>
+
+<body onload="inicializar()">
+
+  <div id="customConfirm">
+    <div class="modal-content">
+      <h3 id="confirmTitle" class="text-lg font-black text-slate-800 mb-1 uppercase">¿Confirmar?</h3>
+      <p id="confirmText" class="text-xs text-slate-500 font-bold mb-6 italic">Confirma la acción, Manu.</p>
+      <div class="flex gap-3">
+        <button onclick="cerrarConfirm(false)" class="flex-1 py-3 bg-slate-100 text-slate-500 font-black rounded-xl uppercase text-[10px]">No</button>
+        <button onclick="cerrarConfirm(true)" class="flex-1 py-3 bg-red-600 text-white font-black rounded-xl uppercase text-[10px]">Sí</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="appWrapper">
+    <div id="secCalc" class="content-section active-section">
+      <div id="headerPanel" class="p-5 text-white bg-[#d97706] shadow-lg">
+        <div class="flex justify-between items-center mb-2">
+          <div class="bg-black/20 p-2 px-3 rounded-xl flex items-center gap-2 border border-white/20">
+            <span class="text-[10px] font-black text-yellow-300 uppercase italic">BCV</span>
+            <input type="tel" id="tasa" class="bg-transparent font-black w-20 text-white text-xl" oninput="guardarTasaManual(this.value)">
+            <button onclick="fetchBCV()" id="btnRefresh"><svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+          </div>
+          <button onclick="confirmarAccion('carrito')" class="bg-red-600 text-[10px] font-black uppercase px-4 py-2 rounded-lg shadow-md italic">Limpiar</button>
+        </div>
+        <div class="text-center">
+          <div id="displaySaldo" class="text-5xl font-black tracking-tighter">0,00</div>
+          <div class="mt-1"><span id="displayEquiv" class="text-sm font-black text-white/80 bg-black/10 px-4 py-1 rounded-full italic">0,00 Bs</span></div>
+        </div>
+      </div>
+
+      <div class="p-4 space-y-4">
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="flex gap-2 p-1 bg-slate-100 rounded-xl mb-3">
+            <button id="btnPUSD" onclick="setMonedaP('USD')" class="flex-1 py-2 rounded-lg font-black text-[10px] uppercase bg-[#d97706] text-white">Tengo $</button>
+            <button id="btnPBS" onclick="setMonedaP('BS')" class="flex-1 py-2 rounded-lg font-black text-[10px] uppercase bg-white text-slate-400">Tengo Bs</button>
+          </div>
+          <input type="tel" id="inputPresupuesto" placeholder="PRESUPUESTO 0,00" class="w-full text-4xl font-black text-center bg-transparent text-slate-800" oninput="recalculoRapido()">
+        </div>
+
+        <div class="flex gap-2">
+          <div class="flex-[3] relative">
+            <input type="text" id="nombreProd" oninput="gestionarEscritura(this.value, 'sugerenciasIA')" placeholder="PRODUCTO..." class="w-full p-4 rounded-xl font-black border-2 border-slate-200 text-center uppercase text-sm bg-white shadow-sm">
+            <div id="sugerenciasIA" class="hidden absolute w-full bg-white border-2 border-slate-300 rounded-xl shadow-2xl z-[500] mt-1 max-h-64 overflow-y-auto"></div>
+          </div>
+          <div class="flex-1">
+            <input type="tel" id="cantProd" placeholder="CANT." class="w-full p-4 rounded-xl font-black border-2 border-indigo-400 text-center text-sm bg-white text-indigo-700 italic">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <input type="tel" id="inputUSD" placeholder="PRECIO $" class="w-full p-4 border-2 border-amber-300 rounded-xl text-center font-black text-amber-700 text-lg shadow-sm" onkeydown="handleEnter(event)">
+          <input type="tel" id="inputBS" placeholder="PRECIO Bs" class="w-full p-4 border-2 border-emerald-300 rounded-xl text-center font-black text-emerald-700 text-lg shadow-sm" onkeydown="handleEnter(event)">
+        </div>
+
+        <button onclick="añadir()" class="w-full bg-indigo-600 text-white font-black py-4 rounded-xl shadow-lg uppercase text-xs active:scale-95 italic">Añadir al Carrito</button>
+        <div id="contenedorLista" class="space-y-3"></div>
+      </div>
+    </div>
+
+    <div id="secPlan" class="content-section">
+      <div class="p-5">
+        <h2 class="text-xl font-black text-slate-800 uppercase italic mb-6 border-b-4 border-amber-500 inline-block">Mi Lista</h2>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3 mb-6">
+          <input type="text" id="nombrePlan" oninput="gestionarEscritura(this.value, 'sugPlan')" placeholder="¿QUÉ FALTA?" class="w-full p-4 rounded-xl font-black border-2 border-slate-100 uppercase text-xs text-center">
+          <div id="sugPlan" class="hidden absolute w-full bg-white border-2 border-slate-300 rounded-xl shadow-2xl z-[500] mt-1"></div>
+          <div class="grid grid-cols-2 gap-2">
+            <input type="tel" id="cantPlan" placeholder="CANTIDAD" class="p-4 rounded-xl border-2 border-slate-100 font-black text-center italic">
+            <select id="medidaPlan" class="p-4 rounded-xl border-2 border-slate-100 font-black text-center bg-slate-50 text-[10px] italic">
+              <option value="unid">UNIDADES</option>
+              <option value="kg">KILOS</option>
+            </select>
+          </div>
+          <button onclick="agregarAlPlan()" class="w-full bg-amber-500 text-white font-black py-4 rounded-xl shadow-md uppercase text-xs italic">Anotar</button>
+        </div>
+        <div id="contenedorPlan" class="space-y-3"></div>
+      </div>
+    </div>
+
+    <div id="secHist" class="content-section">
+      <div class="p-5">
+        <div class="flex justify-between items-center mb-5">
+          <h2 class="text-xl font-black text-slate-800 uppercase italic border-b-4 border-indigo-500">Historial</h2>
+          <button onclick="confirmarAccion('historial_todo')" class="text-red-500 bg-red-50 p-2 rounded-lg">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"></path></svg>
+          </button>
+        </div>
+        <div id="listaHistorial" class="space-y-4"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="footerTotales" class="footer-sticky flex justify-between items-center">
+    <div class="flex flex-col">
+      <div id="totalGastoBs" class="text-2xl font-black text-emerald-400">0,00 Bs</div>
+      <div id="totalGastoUsd" class="text-lg font-black text-indigo-300 italic">0,00 $</div>
+    </div>
+    <button onclick="finalizar()" class="bg-indigo-500 px-6 py-3 rounded-xl font-black text-xs uppercase italic">Finalizar</button>
+  </div>
+
+  <nav class="nav-fixed">
+    <button onclick="verPestaña('calc')" id="btnNavCalc" class="flex flex-col items-center text-indigo-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg><span class="text-[9px] font-black uppercase mt-1">Carrito</span></button>
+    <button onclick="verPestaña('plan')" id="btnNavPlan" class="flex flex-col items-center text-slate-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg><span class="text-[9px] font-black uppercase mt-1">Lista</span></button>
+    <button onclick="verPestaña('hist')" id="btnNavHist" class="flex flex-col items-center text-slate-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-[9px] font-black uppercase mt-1">Historial</span></button>
+  </nav>
+
+  <script>
+    // BLOQUEO DE PULL-TO-REFRESH
+    let lastY = 0;
+    const wrapper = document.getElementById('appWrapper');
+    wrapper.addEventListener('touchstart', (e) => { lastY = e.touches[0].pageY; }, { passive: false });
+    wrapper.addEventListener('touchmove', (e) => {
+        const y = e.touches[0].pageY;
+        if (wrapper.scrollTop <= 0 && y > lastY) { e.preventDefault(); }
+        lastY = y;
+    }, { passive: false });
+
+    // Variables
+    let carrito = [];
+    let planCompras = JSON.parse(localStorage.getItem('plan_v108')) || [];
+    let historial = JSON.parse(localStorage.getItem('hist_v108')) || [];
+    let monedaP = 'USD';
+    let confirmCallback = null;
+    let ultimoSaldoLimpio = 0;
+
+    const emojiMap = {
+      'POLLO': '🍗', 'CARNE': '🥩', 'BISTEC': '🥩', 'CHULETA': '🥓', 'JAMON': '🥓', 'TOCINETA': '🥓', 'PESCADO': '🐟', 'ATUN': '🐟', 'HUEVO': '🥚', 'MOLIDA': '🥩', 'SALCHICHA': '🌭',
+      'LECHE': '🥛', 'QUESO': '🧀', 'YOGURT': '🍦', 'MANTEQUILLA': '🧈', 'SUERO': '🥛',
+      'PAPA': '🥔', 'CEBOLLA': '🧅', 'TOMATE': '🍅', 'AJO': '🧄', 'LECHUGA': '🥬', 'ZANAHORIA': '🥕', 'AGUACATE': '🥑', 'PLATANO': '🍌', 'CAMBUR': '🍌', 'MANZANA': '🍎', 'PERA': '🍐', 'LIMON': '🍋', 'NARANJA': '🍊', 'PATILLA': '🍉', 'PIÑA': '🍍', 'UVA': '🍇', 'FRESA': '🍓', 'PIMENTON': '🫑', 'CALABACIN': '🥒', 'YUCA': '🪵',
+      'HARINA': '🥯', 'ARROZ': '🍚', 'PASTA': '🍝', 'ESPAGUETI': '🍝', 'ACEITE': '🛢️', 'AZUCAR': '🍬', 'SAL': '🧂', 'CAFE': '☕', 'GRANO': '🫘', 'CARAOTA': '🫘', 'LENTEJA': '🫘', 'PAN': '🍞', 'GALLETA': '🍪', 'MAYONESA': '🧴', 'SALSA': '🥫', 'AVENA': '🥣', 'CEREAL': '🥣',
+      'AGUA': '💧', 'REFRESCO': '🥤', 'PEPSI': '🥤', 'COLA': '🥤', 'JUGO': '🧃', 'CERVEZA': '🍺', 'VINO': '🍷', 'RON': '🥃', 'MALTA': '🍺',
+      'JABON': '🧼', 'DETERGENTE': '🧼', 'CHAMPU': '🧴', 'DESODORANTE': '✨', 'PAPEL': '🧻', 'CLORO': '🧪', 'DESINFECTANTE': '🧹', 'CREMA': '🪥', 'PASTA DENTAL': '🪥',
+      'PERRO': '🐶', 'GATO': '🐱', 'HIELO': '🧊', 'BOLSA': '🛍️', 'CANDELA': '🔥', 'PILAS': '🔋'
+    };
+
+    function obtenerIcono(n) { const u = n.toUpperCase(); for (let k in emojiMap) { if (u.includes(k)) return emojiMap[k]; } return "📦"; }
+    function fmt(n) { return parseFloat(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+    function confirmarAccion(tipo, id = null) {
+      const mod = document.getElementById('customConfirm');
+      const tit = document.getElementById('confirmTitle');
+      const txt = document.getElementById('confirmText');
+
+      if(tipo === 'carrito') { tit.innerText="¿Limpiar?"; txt.innerText="Se borrará todo el carrito."; confirmCallback = () => { carrito = []; recalculoRapido(); }; }
+      else if(tipo === 'historial_todo') { tit.innerText="¿Borrar Todo?"; txt.innerText="No podrás recuperar compras pasadas."; confirmCallback = () => { historial = []; guardarHist(); }; }
+      else if(tipo === 'reabrir') { tit.innerText="¿Reabrir Compra?"; txt.innerText="Los productos volverán al carrito para seguir comprando."; confirmCallback = () => { reabrirCompra(id); }; }
+      
+      mod.classList.add('show');
+    }
+
+    function cerrarConfirm(aceptar) { document.getElementById('customConfirm').classList.remove('show'); if(aceptar && confirmCallback) confirmCallback(); confirmCallback = null; }
+
+    function gestionarEscritura(v, divId) {
+      const div = document.getElementById(divId);
+      if (!v) { div.classList.add('hidden'); return; }
+      const filtrados = Object.keys(emojiMap).filter(p => p.includes(v.toUpperCase())).slice(0, 8);
+      div.innerHTML = filtrados.map(p => `<div class="sugerencia-link" onclick="seleccionarIA('${p}', '${divId}')"><span>${emojiMap[p]}</span><span>${p}</span></div>`).join('');
+      div.classList.toggle('hidden', filtrados.length === 0);
+    }
+
+    function seleccionarIA(p, divId) { const inputId = divId === 'sugerenciasIA' ? 'nombreProd' : 'nombrePlan'; document.getElementById(inputId).value = p; document.getElementById(divId).classList.add('hidden'); }
+
+    function agregarAlPlan() {
+      const nom = document.getElementById('nombrePlan').value.trim().toUpperCase();
+      const cant = document.getElementById('cantPlan').value || "1", med = document.getElementById('medidaPlan').options[document.getElementById('medidaPlan').selectedIndex].text;
+      if (!nom) return; planCompras.push({ id: Date.now(), nombre: nom, cantidad: cant, medida: med, tachado: false });
+      document.getElementById('nombrePlan').value = ''; document.getElementById('cantPlan').value = ''; guardarPlan();
+    }
+
+    function renderPlan() {
+      const div = document.getElementById('contenedorPlan');
+      div.innerHTML = planCompras.map(p => `
+        <div class="card-item flex justify-between items-center ${p.tachado ? 'comprado' : 'border-l-[#f59e0b]'}" onclick="usarDelPlan(${p.id})">
+          <div class="flex flex-col">
+            <span class="font-black text-sm uppercase">${p.nombre}</span>
+            <span class="text-[10px] font-bold italic uppercase">${p.cantidad} ${p.medida}</span>
+          </div>
+          <button onclick="event.stopPropagation(); planCompras = planCompras.filter(x => x.id !== ${p.id}); guardarPlan();" class="text-red-300 px-3 text-xl">✕</button>
+        </div>`).join('');
+    }
+
+    function usarDelPlan(id) { const p = planCompras.find(x => x.id === id); if(!p.tachado) { document.getElementById('nombreProd').value = p.nombre; document.getElementById('cantProd').value = p.cantidad; p.tachado = true; verPestaña('calc'); } else { p.tachado = false; } guardarPlan(); }
+    function guardarPlan() { localStorage.setItem('plan_v108', JSON.stringify(planCompras)); renderPlan(); }
+
+    function añadir() {
+      const n = document.getElementById('nombreProd').value.trim().toUpperCase() || "PRODUCTO", cant = parseFloat(document.getElementById('cantProd').value) || 1;
+      const iU = document.getElementById('inputUSD'), iB = document.getElementById('inputBS');
+      let valor = (iU.value || iB.value).replace(/,/g, '.'); if (!valor) return;
+      let mon = iU.value ? 'USD' : 'BS', unit = parseFloat(valor) || 0;
+      if (unit > 0) { 
+        carrito.push({ id: Date.now(), nombre: n, icon: obtenerIcono(n), unit, cantidad: cant, montoTotal: unit * cant, moneda: mon }); 
+        iU.value = ''; iB.value = ''; document.getElementById('nombreProd').value = ''; document.getElementById('cantProd').value = ''; 
+        recalculoRapido(); 
+      }
+    }
+
+    function recalculoRapido() {
+      const tasa = parseFloat(document.getElementById('tasa').value.replace(',', '.')) || 1, presu = parseFloat(document.getElementById('inputPresupuesto').value.replace(',', '.')) || 0;
+      let tBs = 0, tUsd = 0; const listaDiv = document.getElementById('contenedorLista'); listaDiv.innerHTML = '';
+      
+      carrito.slice().reverse().forEach(item => {
+        let uBs = item.moneda === 'USD' ? item.unit * tasa : item.unit;
+        let uUsd = item.moneda === 'BS' ? item.unit / tasa : item.unit;
+        let tProdBs = item.moneda === 'USD' ? item.montoTotal * tasa : item.montoTotal;
+        let tProdUsd = item.moneda === 'BS' ? item.montoTotal / tasa : item.montoTotal;
+        tBs += tProdBs; tUsd += tProdUsd;
+        
+        listaDiv.innerHTML += `
+          <div class="card-item border-l-indigo-500 mb-3">
+            <div class="flex justify-between items-start mb-1">
+              <span class="text-sm font-black italic uppercase">${item.icon} ${item.nombre} (x${item.cantidad})</span>
+              <button onclick="carrito = carrito.filter(i => i.id !== ${item.id}); recalculoRapido();" class="text-red-500 font-black px-1">✕</button>
+            </div>
+            <div class="border-t border-slate-50 pt-2">
+               <div class="flex justify-between text-[10px] text-slate-500 font-bold italic">
+                  <span>Unit: ${fmt(uBs)} Bs | ${fmt(uUsd)} $</span>
+               </div>
+               <div class="flex justify-between items-end font-black">
+                  <span class="text-[11px] text-slate-400 uppercase">Total:</span>
+                  <span class="text-indigo-600 text-lg">${fmt(tProdBs)} Bs | ${fmt(tProdUsd)} $</span>
+               </div>
+            </div>
+          </div>`;
+      });
+      
+      let sBs = (monedaP === 'BS' ? presu : presu * tasa) - tBs, sUsd = (monedaP === 'USD' ? presu : presu / tasa) - tUsd;
+      
+      // Guardamos para el presupuesto automático
+      ultimoSaldoLimpio = monedaP === 'USD' ? sUsd : sBs;
+
+      document.getElementById('displaySaldo').innerText = (monedaP === 'USD' ? fmt(sUsd) : fmt(sBs));
+      document.getElementById('displayEquiv').innerText = (monedaP === 'USD' ? fmt(sBs) + " Bs" : fmt(sUsd) + " $");
+      document.getElementById('totalGastoUsd').innerText = fmt(tUsd) + " $"; document.getElementById('totalGastoBs').innerText = fmt(tBs) + " Bs";
+      return { sBs, sUsd, tBs, tUsd }; 
+    }
+
+    function finalizar() {
+      if (carrito.length === 0) return;
+      const tasa = parseFloat(document.getElementById('tasa').value.replace(',', '.'));
+      const calculos = recalculoRapido();
+      
+      const compra = { 
+        id: Date.now(), 
+        fecha: new Date().toLocaleString(), 
+        tasa: tasa.toFixed(2), 
+        monedaPresu: monedaP,
+        totalBs: fmt(calculos.tBs), 
+        totalUsd: fmt(calculos.tUsd), 
+        sobraBs: fmt(calculos.sBs),
+        sobraUsd: fmt(calculos.sUsd),
+        detalles: [...carrito] 
+      };
+
+      historial.unshift(compra); 
+      localStorage.setItem('hist_v108', JSON.stringify(historial)); 
+      
+      // LO NUEVO: El saldo que quedó se vuelve el nuevo presupuesto
+      document.getElementById('inputPresupuesto').value = ultimoSaldoLimpio.toFixed(2);
+      
+      carrito = []; 
+      recalculoRapido(); 
+      renderHistorial(); 
+      verPestaña('hist');
+    }
+
+    function reabrirCompra(id) {
+      const index = historial.findIndex(h => h.id === id);
+      if (index > -1) {
+        const h = historial[index];
+        // Recuperamos los productos
+        carrito = [...h.detalles];
+        // Recuperamos la moneda que usaba el presupuesto en esa compra
+        setMonedaP(h.monedaPresu);
+        // Borramos del historial
+        historial.splice(index, 1);
+        guardarHist();
+        recalculoRapido();
+        verPestaña('calc');
+      }
+    }
+
+    function renderHistorial() {
+      document.getElementById('listaHistorial').innerHTML = historial.map(h => `
+        <div class="card-item historial-card mb-4">
+          <div onclick="toggleDetalle(${h.id})">
+            <p class="text-[10px] text-slate-400 font-bold italic">${h.fecha} (Tasa: ${h.tasa})</p>
+            <div class="flex justify-between mt-1">
+              <span class="text-[12px] text-indigo-900 font-black">${h.totalBs} Bs / ${h.totalUsd} $</span>
+              <span class="text-emerald-600 font-black text-[10px] text-right">Sobra:<br>${h.sobraBs} Bs<br>${h.sobraUsd} $</span>
+            </div>
+          </div>
+          <div id="detalle-${h.id}" class="detalles-historial space-y-2">
+            ${h.detalles.map(d => {
+              let uBs = d.moneda === 'USD' ? d.unit * h.tasa : d.unit;
+              let uUsd = d.moneda === 'BS' ? d.unit / h.tasa : d.unit;
+              let tBs = d.moneda === 'USD' ? d.montoTotal * h.tasa : d.montoTotal;
+              let tUsd = d.moneda === 'BS' ? d.montoTotal / h.tasa : d.montoTotal;
+              return `
+              <div class="bg-slate-50 p-2 rounded-lg border-b border-slate-200">
+                <div class="flex justify-between font-black text-[11px] text-slate-800 uppercase italic"><span>${d.icon} ${d.nombre} (x${d.cant || d.cantidad})</span></div>
+                <div class="flex justify-between text-[10px] text-slate-500 font-bold italic">
+                  <span>Unit: ${fmt(uBs)} Bs | ${fmt(uUsd)} $</span>
+                  <span class="text-indigo-600">Total: ${fmt(tBs)} Bs | ${fmt(tUsd)} $</span>
+                </div>
+              </div>`}).join('')}
+              <button onclick="confirmarAccion('reabrir', ${h.id})" class="w-full mt-3 bg-indigo-100 text-indigo-700 font-black py-2 rounded-xl text-[10px] uppercase italic">
+                Reabrir compra y seguir sumando
+              </button>
+          </div>
+        </div>`).join('');
+    }
+
+    function toggleDetalle(id) { document.getElementById(`detalle-${id}`).classList.toggle('open'); }
+    function guardarHist() { localStorage.setItem('hist_v108', JSON.stringify(historial)); renderHistorial(); }
+    function inicializar() { document.getElementById('tasa').value = localStorage.getItem('lastBCV') || "60.00"; renderPlan(); renderHistorial(); recalculoRapido(); }
+    
+    function verPestaña(p) {
+      document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active-section'));
+      document.getElementById('sec' + p.charAt(0).toUpperCase() + p.slice(1)).classList.add('active-section');
+      document.getElementById('footerTotales').style.display = (p === 'calc' ? 'flex' : 'none');
+      document.querySelectorAll('nav button').forEach(b => b.classList.replace('text-indigo-600', 'text-slate-400'));
+      document.getElementById('btnNav' + p.charAt(0).toUpperCase() + p.slice(1)).classList.replace('text-slate-400', 'text-indigo-600');
+      wrapper.scrollTo(0,0);
+    }
+
+    function setMonedaP(m) { monedaP = m; document.getElementById('btnPUSD').className = m === 'USD' ? 'flex-1 py-2 rounded-lg font-black text-[10px] uppercase bg-[#d97706] text-white' : 'flex-1 py-2 rounded-lg font-black text-[10px] uppercase bg-white text-slate-400'; document.getElementById('btnPBS').className = m === 'BS' ? 'flex-1 py-2 rounded-lg font-black text-[10px] uppercase bg-[#059669] text-white' : 'flex-1 py-2 rounded-lg font-black text-[10px] uppercase bg-white text-slate-400'; document.getElementById('headerPanel').style.backgroundColor = m === 'USD' ? "#d97706" : "#059669"; recalculoRapido(); }
+    async function fetchBCV() { const btn = document.getElementById('btnRefresh'); btn.classList.add('spinning'); try { const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial'); const data = await res.json(); if (data.promedio) { document.getElementById('tasa').value = data.promedio.toFixed(2); guardarTasaManual(data.promedio.toFixed(2)); } } catch (e) {} btn.classList.remove('spinning'); }
+    function guardarTasaManual(v) { localStorage.setItem('lastBCV', v); recalculoRapido(); }
+    function handleEnter(e) { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); setTimeout(añadir, 50); } }
+  </script>
+</body>
+</html>
